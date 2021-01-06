@@ -53,6 +53,7 @@ import org.apache.iotdb.db.engine.cache.ChunkMetadataCache;
 import org.apache.iotdb.db.engine.cache.TimeSeriesMetadataCache;
 import org.apache.iotdb.db.exception.BatchProcessException;
 import org.apache.iotdb.db.exception.QueryInBatchStatementException;
+import org.apache.iotdb.db.exception.SessionException;
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.metadata.IllegalPathException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
@@ -95,6 +96,11 @@ import org.apache.iotdb.db.query.dataset.AlignByDeviceDataSet;
 import org.apache.iotdb.db.query.dataset.DirectAlignByTimeDataSet;
 import org.apache.iotdb.db.query.dataset.DirectNonAlignDataSet;
 import org.apache.iotdb.db.query.dataset.UDTFDataSet;
+import org.apache.iotdb.db.query.session.Query;
+import org.apache.iotdb.db.query.session.QueryStatement;
+import org.apache.iotdb.db.query.session.Session;
+import org.apache.iotdb.db.query.session.SessionManager;
+import org.apache.iotdb.db.query.session.Statement;
 import org.apache.iotdb.db.tools.watermark.GroupedLSBWatermarkEncoder;
 import org.apache.iotdb.db.tools.watermark.WatermarkEncoder;
 import org.apache.iotdb.db.utils.FilePathUtils;
@@ -195,10 +201,12 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
 
   private static final AtomicInteger queryCount = new AtomicInteger(0);
 
+  private final SessionManager sessionManager;
 
-  public TSServiceImpl() throws QueryProcessException {
+  public TSServiceImpl() throws QueryProcessException, AuthException {
     processor = new Planner();
     executor = new PlanExecutor();
+    sessionManager = new SessionManager(executor);
 
     ScheduledExecutorService timedQuerySqlCountThread = Executors
         .newSingleThreadScheduledExecutor(r -> new Thread(r, "timedQuerySqlCountThread"));
@@ -217,54 +225,47 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
 
   @Override
   public TSOpenSessionResp openSession(TSOpenSessionReq req) throws TException {
-    boolean status;
+    //check the version compatibility
+    boolean compatible = checkCompatibility(req.getClient_protocol());
+    if (!compatible) {
+      TSOpenSessionResp resp = new TSOpenSessionResp(
+          RpcUtils.getStatus(TSStatusCode.INCOMPATIBLE_VERSION,
+              "The version is incompatible, please upgrade to " + IoTDBConstant.VERSION),
+          CURRENT_RPC_VERSION);
+      return resp;
+    }
+
     IAuthorizer authorizer;
     try {
       authorizer = BasicAuthorizer.getInstance();
-    } catch (AuthException e) {
-      throw new TException(e);
-    }
-    String loginMessage = null;
-    try {
-      status = authorizer.login(req.getUsername(), req.getPassword());
+      if (!authorizer.login(req.getUsername(), req.getPassword())) {
+        auditLogger.info("User {} opens Session failed with an incorrect password",
+            req.getUsername());
+
+        return new TSOpenSessionResp(
+            RpcUtils.getStatus(TSStatusCode.WRONG_LOGIN_PASSWORD_ERROR, "Authentication failed."),
+            CURRENT_RPC_VERSION);
+      }
     } catch (AuthException e) {
       logger.info("meet error while logging in.", e);
-      status = false;
-      loginMessage = e.getMessage();
+      return new TSOpenSessionResp(
+          RpcUtils.getStatus(TSStatusCode.WRONG_LOGIN_PASSWORD_ERROR, e.getMessage()),
+          CURRENT_RPC_VERSION);
     }
 
-    TSStatus tsStatus;
-    long sessionId = -1;
-    if (status) {
-      //check the version compatibility
-      boolean compatible = checkCompatibility(req.getClient_protocol());
-      if (!compatible) {
-        tsStatus = RpcUtils.getStatus(TSStatusCode.INCOMPATIBLE_VERSION,
-            "The version is incompatible, please upgrade to " + IoTDBConstant.VERSION);
-        TSOpenSessionResp resp = new TSOpenSessionResp(tsStatus, CURRENT_RPC_VERSION);
-        resp.setSessionId(sessionId);
-        return resp;
-      }
+    try {
+      Session session = sessionManager.createSession(req.getUsername(), ZoneId.of(req.getZoneId()),
+          req.getClient_protocol());
 
-      tsStatus = RpcUtils.getStatus(TSStatusCode.SUCCESS_STATUS, "Login successfully");
-      sessionId = sessionIdGenerator.incrementAndGet();
-      sessionIdUsernameMap.put(sessionId, req.getUsername());
-      sessionIdZoneIdMap.put(sessionId, ZoneId.of(req.getZoneId()));
-      currSessionId.set(sessionId);
-      auditLogger.info("User {} opens Session-{}", req.getUsername(), sessionId);
-      logger.info(
-          "{}: Login status: {}. User : {}", IoTDBConstant.GLOBAL_DB_NAME, tsStatus.message,
-          req.getUsername());
-    } else {
-      tsStatus = RpcUtils.getStatus(TSStatusCode.WRONG_LOGIN_PASSWORD_ERROR,
-          loginMessage != null ? loginMessage : "Authentication failed.");
-      auditLogger
-          .info("User {} opens Session failed with an incorrect password", req.getUsername());
+      TSOpenSessionResp resp = new TSOpenSessionResp(
+          RpcUtils.getStatus(TSStatusCode.SUCCESS_STATUS, "Login successfully"),
+          CURRENT_RPC_VERSION);
+      resp.setSessionId(session.getSessionId());
+      return resp;
+    } catch (SessionException e) {
+      return new TSOpenSessionResp(RpcUtils.getStatus(e.getErrorCode(), e.getMessage()),
+          CURRENT_RPC_VERSION);
     }
-    TSOpenSessionResp resp = new TSOpenSessionResp(tsStatus,
-        CURRENT_RPC_VERSION);
-    resp.setSessionId(sessionId);
-    return resp;
   }
 
   private boolean checkCompatibility(TSProtocolVersion version) {
@@ -324,7 +325,8 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
       auditLogger.debug("{}: receive close operation from Session {}", IoTDBConstant.GLOBAL_DB_NAME,
           currSessionId.get());
     }
-    if (!checkLogin(req.getSessionId())) {
+    Session session = sessionManager.getSession(req.getSessionId());
+    if (session == null) {
       auditLogger.info(INFO_NOT_LOGIN, IoTDBConstant.GLOBAL_DB_NAME);
       return RpcUtils.getStatus(TSStatusCode.NOT_LOGIN_ERROR);
     }
@@ -332,17 +334,12 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
       // statement close
       if (req.isSetStatementId()) {
         long stmtId = req.getStatementId();
-        Set<Long> queryIdSet = statementId2QueryId.remove(stmtId);
-        if (queryIdSet != null) {
-          for (long queryId : queryIdSet) {
-            releaseQueryResource(queryId);
-          }
-        }
+        QueryStatement queryStatement = session.getQueryStatement(stmtId);
+        queryStatement.close();
       } else {
-        // ResultSet close
-        releaseQueryResource(req.queryId);
+        Query query = session.searchQuery(req.getQueryId());
+        query.close();
       }
-
     } catch (NullPointerException e) {
       logger.error("Error in closeOperation : ", e);
       return RpcUtils.getStatus(TSStatusCode.CLOSE_OPERATION_ERROR, "Error in closeOperation");
@@ -518,22 +515,56 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
 
   @Override
   public TSExecuteStatementResp executeStatement(TSExecuteStatementReq req) {
-    try {
-      if (!checkLogin(req.getSessionId())) {
-        logger.info(INFO_NOT_LOGIN, IoTDBConstant.GLOBAL_DB_NAME);
-        return RpcUtils.getTSExecuteStatementResp(TSStatusCode.NOT_LOGIN_ERROR);
-      }
-      String statement = req.getStatement();
+    Session session = sessionManager.getSession(req.getSessionId());
+    if (session == null) {
+      logger.info(INFO_NOT_LOGIN, IoTDBConstant.GLOBAL_DB_NAME);
+      return RpcUtils.getTSExecuteStatementResp(TSStatusCode.NOT_LOGIN_ERROR);
+    }
 
-      PhysicalPlan physicalPlan = processor
-          .parseSQLToPhysicalPlan(statement, sessionIdZoneIdMap.get(req.getSessionId()),
-              req.fetchSize);
-      if (physicalPlan.isQuery()) {
-        return internalExecuteQueryStatement(statement, req.statementId, physicalPlan,
-            req.fetchSize, sessionIdUsernameMap.get(req.getSessionId()));
+    try {
+      String sql = req.getStatement();
+      PhysicalPlan plan = processor.parseSQLToPhysicalPlan(sql, session.getZoneId(),
+          req.fetchSize);
+      String userName = session.getUserName();
+
+      if (plan.isQuery()) {
+        QueryStatement statement = session.openQueryStatement();
+        int optimizedFetchSize = optimizeFetchSize(plan, req.getFetchSize());
+        Query query = statement.openQuery(optimizedFetchSize, analyseDeduplicatedPathNum(plan));
+        optimizePhysicalPlan(plan, req.getFetchSize(), userName);
+        TSExecuteStatementResp resp = null;
+        // execute it before createDataSet since it may change the content of query plan
+        if (plan instanceof QueryPlan && !(plan instanceof UDFPlan)) {
+          resp = getQueryColumnHeaders(plan, userName);
+        }
+        QueryDataSet dataSet = query.query(plan);
+        if (plan instanceof ShowPlan || plan instanceof AuthorPlan) {
+          resp = getListDataSetHeaders(dataSet);
+        } else if (plan instanceof UDFPlan) {
+          resp = getQueryColumnHeaders(plan, userName);
+        }
+
+        resp.setOperationType(plan.getOperatorType().toString());
+        if (plan.getOperatorType() == OperatorType.AGGREGATION) {
+          resp.setIgnoreTimeStamp(true);
+        } // else default ignoreTimeStamp is false
+
+        if (dataSet instanceof DirectNonAlignDataSet) {
+          resp.setNonAlignQueryDataSet(fillRpcNonAlignReturnData(optimizedFetchSize, dataSet,
+              userName));
+        } else {
+          resp.setQueryDataSet(fillRpcReturnData(optimizedFetchSize, dataSet, userName));
+        }
+        resp.setQueryId(query.getQueryId());
+        return resp;
       } else {
-        return executeUpdateStatement(physicalPlan, req.getSessionId());
+//        statement = session.openNoneQueryStatement();
+//        return executeUpdateStatement(physicalPlan, req.getSessionId());
       }
+//      Query execute = statement.execute(physicalPlan);
+//      execute.query()
+//
+      return null;
     } catch (ParseCancellationException e) {
       logger.warn(ERROR_PARSING_SQL, req.getStatement() + " " + e.getMessage());
       return RpcUtils.getTSExecuteStatementResp(TSStatusCode.SQL_PARSE_ERROR, e.getMessage());
@@ -644,6 +675,75 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
           RpcUtils.getStatus(TSStatusCode.INTERNAL_SERVER_ERROR, e.getMessage()));
     }
   }
+
+
+  private int optimizeFetchSize(PhysicalPlan plan, int fetchSize) {
+    // In case users forget to set this field in query, use the default value
+    if (fetchSize == 0) {
+      fetchSize = DEFAULT_FETCH_SIZE;
+    }
+    if (plan.getOperatorType() == OperatorType.AGGREGATION) {
+      // the actual row number of aggregation query is 1
+      fetchSize = 1;
+    }
+    if (plan instanceof GroupByTimePlan) {
+      GroupByTimePlan groupByTimePlan = (GroupByTimePlan) plan;
+      // the actual row number of group by query should be calculated from startTime, endTime and interval.
+      fetchSize = Math.min(
+          (int) ((groupByTimePlan.getEndTime() - groupByTimePlan.getStartTime()) / groupByTimePlan
+              .getInterval()), fetchSize);
+    }
+    if (plan instanceof LastQueryPlan) {
+      // last query's actual row number should be the minimum between the number of series and fetchSize
+      fetchSize = Math.min(((LastQueryPlan) plan).getDeduplicatedPaths().size(), fetchSize);
+    }
+    return fetchSize;
+  }
+
+
+  private int analyseDeduplicatedPathNum(PhysicalPlan plan) {
+    // get deduplicated path num
+    int deduplicatedPathNum = -1;
+    if (plan instanceof AlignByDevicePlan) {
+      deduplicatedPathNum = ((AlignByDevicePlan) plan).getMeasurements().size();
+    } else if (plan instanceof LastQueryPlan) {
+      // dataset of last query consists of three column: time column + value column = 1 deduplicatedPathNum
+      // and we assume that the memory which sensor name takes equals to 1 deduplicatedPathNum
+      deduplicatedPathNum = 2;
+    } else if (plan instanceof RawDataQueryPlan) {
+      deduplicatedPathNum = ((RawDataQueryPlan) plan).getDeduplicatedPaths().size();
+    }
+    return deduplicatedPathNum;
+  }
+
+  private void optimizePhysicalPlan(PhysicalPlan plan, int fetchSize, String userName)
+      throws QueryProcessException {
+    if (plan instanceof ShowTimeSeriesPlan) {
+      //If the user does not pass the limit, then set limit = fetchSize and haslimit=false,else set haslimit = true
+      if (((ShowTimeSeriesPlan) plan).getLimit() == 0) {
+        ((ShowTimeSeriesPlan) plan).setLimit(fetchSize);
+        ((ShowTimeSeriesPlan) plan).setHasLimit(false);
+      } else {
+        ((ShowTimeSeriesPlan) plan).setHasLimit(true);
+      }
+    }
+    if (plan instanceof QueryPlan && !((QueryPlan) plan).isAlignByTime()) {
+      if (plan.getOperatorType() == OperatorType.AGGREGATION) {
+        throw new QueryProcessException("Aggregation doesn't support disable align clause.");
+      }
+      if (plan.getOperatorType() == OperatorType.FILL) {
+        throw new QueryProcessException("Fill doesn't support disable align clause.");
+      }
+      if (plan.getOperatorType() == OperatorType.GROUPBYTIME) {
+        throw new QueryProcessException("Group by doesn't support disable align clause.");
+      }
+    }
+
+    if (plan instanceof AuthorPlan) {
+      plan.setLoginUserName(userName);
+    }
+  }
+
 
   /**
    * @param plan must be a plan for Query: FillQueryPlan, AggregationPlan, GroupByTimePlan, UDFPlan,
@@ -976,17 +1076,20 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
   @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
   @Override
   public TSFetchResultsResp fetchResults(TSFetchResultsReq req) {
+    Session session = sessionManager.getSession(req.getSessionId());
+    if (session == null) {
+      return RpcUtils.getTSFetchResultsResp(TSStatusCode.NOT_LOGIN_ERROR);
+    }
+
+    Query query = session.searchQuery(req.getQueryId());
+    if (query == null) {
+      return RpcUtils.getTSFetchResultsResp(
+          RpcUtils.getStatus(TSStatusCode.EXECUTE_STATEMENT_ERROR, "Has not executed query"));
+    }
+
+    QueryDataSet queryDataSet = query.getQueryDataSet();
+
     try {
-      if (!checkLogin(req.getSessionId())) {
-        return RpcUtils.getTSFetchResultsResp(TSStatusCode.NOT_LOGIN_ERROR);
-      }
-
-      if (!queryId2DataSet.containsKey(req.queryId)) {
-        return RpcUtils.getTSFetchResultsResp(
-            RpcUtils.getStatus(TSStatusCode.EXECUTE_STATEMENT_ERROR, "Has not executed query"));
-      }
-
-      QueryDataSet queryDataSet = queryId2DataSet.get(req.queryId);
       if (req.isAlign) {
         TSQueryDataSet result =
             fillRpcReturnData(req.fetchSize, queryDataSet, sessionIdUsernameMap.get(req.sessionId));
@@ -1230,7 +1333,9 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
           .debug("Session {} insertRecords, first device {}, first time {}", currSessionId.get(),
               req.deviceIds.get(0), req.getTimestamps().get(0));
     }
-    if (!checkLogin(req.getSessionId())) {
+
+    Session session = sessionManager.getSession(req.getSessionId());
+    if (session == null) {
       logger.info(INFO_NOT_LOGIN, IoTDBConstant.GLOBAL_DB_NAME);
       return RpcUtils.getStatus(TSStatusCode.NOT_LOGIN_ERROR);
     }
@@ -1248,7 +1353,7 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
         plan.setValues(new Object[plan.getMeasurements().length]);
         plan.fillValues(req.valuesList.get(i));
         plan.setNeedInferType(false);
-        TSStatus status = checkAuthority(plan, req.getSessionId());
+        TSStatus status = checkAuthority(plan, session);
         if (status == null) {
           status = executeNonQueryPlan(plan);
           isAllSuccessful =
@@ -1555,13 +1660,14 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
   @Override
   public TSStatus setStorageGroup(long sessionId, String storageGroup) {
     try {
-      if (!checkLogin(sessionId)) {
+      Session session = sessionManager.getSession(sessionId);
+      if (session == null) {
         logger.info(INFO_NOT_LOGIN, IoTDBConstant.GLOBAL_DB_NAME);
         return RpcUtils.getStatus(TSStatusCode.NOT_LOGIN_ERROR);
       }
 
       SetStorageGroupPlan plan = new SetStorageGroupPlan(new PartialPath(storageGroup));
-      TSStatus status = checkAuthority(plan, sessionId);
+      TSStatus status = checkAuthority(plan, session);
       if (status != null) {
         return new TSStatus(status);
       }
@@ -1749,10 +1855,32 @@ public class TSServiceImpl implements TSIService.Iface, ServerContext {
     return statementId;
   }
 
+
   private TSStatus checkAuthority(PhysicalPlan plan, long sessionId) {
     List<PartialPath> paths = plan.getPaths();
     try {
       if (!checkAuthorization(paths, plan, sessionIdUsernameMap.get(sessionId))) {
+        return RpcUtils.getStatus(
+            TSStatusCode.NO_PERMISSION_ERROR,
+            "No permissions for this operation " + plan.getOperatorType().toString());
+      }
+    } catch (AuthException e) {
+      logger.warn("meet error while checking authorization.", e);
+      return RpcUtils.getStatus(TSStatusCode.UNINITIALIZED_AUTH_ERROR, e.getMessage());
+    } catch (NullPointerException e) {
+      logger.error(SERVER_INTERNAL_ERROR, IoTDBConstant.GLOBAL_DB_NAME, e);
+      return RpcUtils.getStatus(TSStatusCode.INTERNAL_SERVER_ERROR, e.getMessage());
+    } catch (Exception e) {
+      logger.warn(SERVER_INTERNAL_ERROR, IoTDBConstant.GLOBAL_DB_NAME, e);
+      return RpcUtils.getStatus(TSStatusCode.INTERNAL_SERVER_ERROR, e.getMessage());
+    }
+    return null;
+  }
+
+  private TSStatus checkAuthority(PhysicalPlan plan, Session session) {
+    List<PartialPath> paths = plan.getPaths();
+    try {
+      if (!checkAuthorization(paths, plan, session.getUserName())) {
         return RpcUtils.getStatus(
             TSStatusCode.NO_PERMISSION_ERROR,
             "No permissions for this operation " + plan.getOperatorType().toString());

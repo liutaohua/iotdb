@@ -62,18 +62,18 @@ public class SessionExample {
         throw e;
     }
 
-    createTimeseries();
-    createMultiTimeseries();
-    insertRecord();
-    insertTablet();
-    insertTablets();
+//    createTimeseries();
+//    createMultiTimeseries();
+//    insertRecord();
+//    insertTablet();
+//    insertTablets();
     insertRecords();
-    nonQuery();
-    query();
-    rawDataQuery();
-    queryByIterator();
-    deleteData();
-    deleteTimeseries();
+//    nonQuery();
+//    query();
+//    rawDataQuery();
+//    queryByIterator();
+//    deleteData();
+//    deleteTimeseries();
     session.close();
   }
 
