@@ -20,6 +20,8 @@
 package org.apache.iotdb.db.query.session;
 
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -29,7 +31,7 @@ import org.apache.iotdb.service.rpc.thrift.TSProtocolVersion;
 public class Session {
 
   private final long sessionId;
-  private final ZoneId zoneId;
+  private ZoneId zoneId;
   private final String userName;
   private final TSProtocolVersion version;
   private final IPlanExecutor executor;
@@ -58,8 +60,12 @@ public class Session {
   }
 
 
-  public void close() {
-
+  public List<Exception> close() {
+    List<Exception> exceptionList = new ArrayList<>();
+    for (QueryStatement value : openedStatement.values()) {
+      exceptionList.addAll(value.close());
+    }
+    return exceptionList;
   }
 
   public long getSessionId() {
@@ -86,5 +92,9 @@ public class Session {
 
   public QueryStatement getQueryStatement(long stmtId) {
     return openedStatement.get(stmtId);
+  }
+
+  public void setZoneId(String timeZone) {
+    this.zoneId = ZoneId.of(timeZone);
   }
 }

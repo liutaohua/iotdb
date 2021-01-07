@@ -19,12 +19,9 @@
 
 package org.apache.iotdb.cluster.server;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,9 +29,6 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import org.apache.iotdb.cluster.client.async.AsyncDataClient;
-import org.apache.iotdb.cluster.client.sync.SyncDataClient;
 import org.apache.iotdb.cluster.config.ClusterConfig;
 import org.apache.iotdb.cluster.config.ClusterDescriptor;
 import org.apache.iotdb.cluster.coordinator.Coordinator;
@@ -42,11 +36,8 @@ import org.apache.iotdb.cluster.metadata.CMManager;
 import org.apache.iotdb.cluster.query.ClusterPlanExecutor;
 import org.apache.iotdb.cluster.query.ClusterPlanner;
 import org.apache.iotdb.cluster.query.RemoteQueryContext;
-import org.apache.iotdb.cluster.rpc.thrift.Node;
-import org.apache.iotdb.cluster.server.handlers.caller.GenericHandler;
 import org.apache.iotdb.cluster.server.member.MetaGroupMember;
 import org.apache.iotdb.db.conf.IoTDBDescriptor;
-import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.exception.metadata.MetadataException;
 import org.apache.iotdb.db.exception.query.QueryProcessException;
 import org.apache.iotdb.db.metadata.PartialPath;
@@ -61,7 +52,6 @@ import org.apache.iotdb.rpc.TSStatusCode;
 import org.apache.iotdb.service.rpc.thrift.TSIService.Processor;
 import org.apache.iotdb.service.rpc.thrift.TSStatus;
 import org.apache.iotdb.tsfile.file.metadata.enums.TSDataType;
-import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -284,41 +274,41 @@ public class ClientServer extends TSServiceImpl {
     return context;
   }
 
-  /**
-   * Release the local and remote resources used by a query.
-   *
-   * @param queryId
-   * @throws StorageEngineException
-   */
-  @Override
-  protected void releaseQueryResource(long queryId) throws StorageEngineException, IOException {
-    // release resources locally
-    super.releaseQueryResource(queryId);
-    // release resources remotely
-    RemoteQueryContext context = queryContextMap.remove(queryId);
-    if (context != null) {
-      // release the resources in every queried node
-      for (Entry<Node, Set<Node>> headerEntry : context.getQueriedNodesMap().entrySet()) {
-        Node header = headerEntry.getKey();
-        Set<Node> queriedNodes = headerEntry.getValue();
-
-        for (Node queriedNode : queriedNodes) {
-          GenericHandler<Void> handler = new GenericHandler<>(queriedNode, new AtomicReference<>());
-          try {
-            if (ClusterDescriptor.getInstance().getConfig().isUseAsyncServer()) {
-              AsyncDataClient client = coordinator.getAsyncDataClient(queriedNode,
-                      RaftServer.getReadOperationTimeoutMS());
-              client.endQuery(header, coordinator.getThisNode(), queryId, handler);
-            } else {
-              SyncDataClient syncDataClient = coordinator.getSyncDataClient(queriedNode,
-                      RaftServer.getReadOperationTimeoutMS());
-              syncDataClient.endQuery(header, coordinator.getThisNode(), queryId);
-            }
-          } catch (IOException | TException e) {
-            logger.error("Cannot end query {} in {}", queryId, queriedNode);
-          }
-        }
-      }
-    }
-  }
+//  /**
+//   * Release the local and remote resources used by a query.
+//   *
+//   * @param queryId
+//   * @throws StorageEngineException
+//   */
+//  @Override
+//  protected void releaseQueryResource(long queryId) throws StorageEngineException, IOException {
+//    // release resources locally
+//    super.releaseQueryResource(queryId);
+//    // release resources remotely
+//    RemoteQueryContext context = queryContextMap.remove(queryId);
+//    if (context != null) {
+//      // release the resources in every queried node
+//      for (Entry<Node, Set<Node>> headerEntry : context.getQueriedNodesMap().entrySet()) {
+//        Node header = headerEntry.getKey();
+//        Set<Node> queriedNodes = headerEntry.getValue();
+//
+//        for (Node queriedNode : queriedNodes) {
+//          GenericHandler<Void> handler = new GenericHandler<>(queriedNode, new AtomicReference<>());
+//          try {
+//            if (ClusterDescriptor.getInstance().getConfig().isUseAsyncServer()) {
+//              AsyncDataClient client = coordinator.getAsyncDataClient(queriedNode,
+//                      RaftServer.getReadOperationTimeoutMS());
+//              client.endQuery(header, coordinator.getThisNode(), queryId, handler);
+//            } else {
+//              SyncDataClient syncDataClient = coordinator.getSyncDataClient(queriedNode,
+//                      RaftServer.getReadOperationTimeoutMS());
+//              syncDataClient.endQuery(header, coordinator.getThisNode(), queryId);
+//            }
+//          } catch (IOException | TException e) {
+//            logger.error("Cannot end query {} in {}", queryId, queriedNode);
+//          }
+//        }
+//      }
+//    }
+//  }
 }

@@ -20,13 +20,19 @@
 package org.apache.iotdb.db.query.session;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.iotdb.db.exception.StorageEngineException;
 import org.apache.iotdb.db.qp.executor.IPlanExecutor;
 import org.apache.iotdb.db.query.control.QueryResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class QueryStatement extends Statement {
+
+  private static final Logger logger = LoggerFactory.getLogger(QueryStatement.class);
 
   private final long statementId;
   private IPlanExecutor executor;
@@ -47,13 +53,24 @@ public class QueryStatement extends Statement {
   }
 
   @Override
-  public void close() throws IOException, StorageEngineException {
+  public List<Exception> close() {
+    List<Exception> exceptionList = new ArrayList<>();
     for (Query q : openedQuery.values()) {
-      q.close();
+      try {
+        q.close();
+      } catch (StorageEngineException | IOException e) {
+        logger.warn("Error in close query statement : ", e);
+        exceptionList.add(e);
+      }
     }
+    return exceptionList;
   }
 
   public Query getQuery(Long queryId) {
     return openedQuery.get(queryId);
+  }
+
+  public long getStatementId() {
+    return statementId;
   }
 }

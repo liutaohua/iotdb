@@ -19,8 +19,8 @@
 
 package org.apache.iotdb.db.query.session;
 
-import java.io.IOException;
-import org.apache.iotdb.db.exception.StorageEngineException;
+import java.util.Collections;
+import java.util.List;
 import org.apache.iotdb.db.qp.physical.PhysicalPlan;
 
 public class Statement {
@@ -28,7 +28,7 @@ public class Statement {
   public void execute(PhysicalPlan physicalPlan) {
   }
 
-  public void close() throws IOException, StorageEngineException {
-
+  public List<Exception> close() {
+    return Collections.emptyList();
   }
 }
