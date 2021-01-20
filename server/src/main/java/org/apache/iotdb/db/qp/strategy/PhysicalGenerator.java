@@ -250,7 +250,8 @@ public class PhysicalGenerator {
             return new ShowPlan(ShowContentType.VERSION);
           case SQLConstant.TOK_TIMESERIES:
             ShowTimeSeriesOperator showTimeSeriesOperator = (ShowTimeSeriesOperator) operator;
-            ShowTimeSeriesPlan showTimeSeriesPlan = new ShowTimeSeriesPlan(showTimeSeriesOperator.getPath(),
+            ShowTimeSeriesPlan showTimeSeriesPlan = new ShowTimeSeriesPlan(
+                showTimeSeriesOperator.getPath(),
                 showTimeSeriesOperator.getLimit(), showTimeSeriesOperator.getOffset(), fetchSize);
             showTimeSeriesPlan.setIsContains(showTimeSeriesOperator.isContains());
             showTimeSeriesPlan.setKey(showTimeSeriesOperator.getKey());
@@ -262,8 +263,9 @@ public class PhysicalGenerator {
                 ShowContentType.STORAGE_GROUP, ((ShowStorageGroupOperator) operator).getPath());
           case SQLConstant.TOK_DEVICES:
             ShowDevicesOperator showDevicesOperator = (ShowDevicesOperator) operator;
-            return new ShowDevicesPlan(showDevicesOperator.getPath(), showDevicesOperator.getLimit(),
-                  showDevicesOperator.getOffset(), fetchSize);
+            return new ShowDevicesPlan(showDevicesOperator.getPath(),
+                showDevicesOperator.getLimit(),
+                showDevicesOperator.getOffset(), fetchSize);
           case SQLConstant.TOK_COUNT_DEVICES:
             return new CountPlan(
                 ShowContentType.COUNT_DEVICES, ((CountOperator) operator).getPath());
@@ -441,15 +443,11 @@ public class PhysicalGenerator {
     if (queryOperator.isAlignByDevice()) {
       // below is the core realization of ALIGN_BY_DEVICE sql logic
       AlignByDevicePlan alignByDevicePlan = new AlignByDevicePlan();
-      if (queryPlan instanceof GroupByTimePlan) {
-        alignByDevicePlan.setGroupByTimePlan((GroupByTimePlan) queryPlan);
-      } else if (queryPlan instanceof FillQueryPlan) {
-        alignByDevicePlan.setFillQueryPlan((FillQueryPlan) queryPlan);
-      } else if (queryPlan instanceof AggregationPlan) {
+      alignByDevicePlan.setPhysicPlan((RawDataQueryPlan) queryPlan);
+      if (queryPlan instanceof AggregationPlan) {
         if (((AggregationPlan) queryPlan).getLevel() >= 0) {
           throw new QueryProcessException("group by level does not support align by device now.");
         }
-        alignByDevicePlan.setAggregationPlan((AggregationPlan) queryPlan);
       }
 
       List<PartialPath> prefixPaths = queryOperator.getFromOperator().getPrefixPaths();
