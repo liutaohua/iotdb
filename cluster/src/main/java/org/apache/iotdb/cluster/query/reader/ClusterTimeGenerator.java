@@ -39,7 +39,7 @@ import org.apache.iotdb.tsfile.read.expression.IExpression;
 import org.apache.iotdb.tsfile.read.expression.impl.SingleSeriesExpression;
 import org.apache.iotdb.tsfile.read.filter.basic.Filter;
 import org.apache.iotdb.tsfile.read.query.dataset.QueryDataSet;
-import org.apache.iotdb.tsfile.read.query.timegenerator.node.AndNode;
+import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.LeafNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.Node;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.OrNode;
@@ -151,7 +151,7 @@ public class ClusterTimeGenerator extends ServerTimeGenerator {
       if (expression.getType() == ExpressionType.OR) {
         return new OrNode(leftChild, rightChild, isAscending);
       } else if (expression.getType() == ExpressionType.AND) {
-        return new AndNode(leftChild, rightChild, isAscending);
+        return new LongAndNode(leftChild, rightChild, isAscending);
       }
       throw new UnSupportedDataTypeException(
           "Unsupported ExpressionType when construct OperatorNode: " + expression.getType());

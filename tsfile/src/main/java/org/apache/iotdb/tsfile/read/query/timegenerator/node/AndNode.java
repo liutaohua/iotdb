@@ -23,83 +23,64 @@ import java.util.function.BiPredicate;
 
 public class AndNode implements Node {
 
-  private Node leftChild;
-  private Node rightChild;
+    private Node leftChild;
+    private Node rightChild;
 
-  private long cachedTime;
-  private boolean hasCachedTime;
-  private boolean ascending = true;
+    private Object cachedObject;
+    private boolean hasCachedTime;
 
-  /**
-   * Constructor of AndNode.
-   *
-   * @param leftChild left child
-   * @param rightChild right child
-   */
-  public AndNode(Node leftChild, Node rightChild) {
-    this.leftChild = leftChild;
-    this.rightChild = rightChild;
-    this.hasCachedTime = false;
-  }
-
-  public AndNode(Node leftChild, Node rightChild, boolean ascending) {
-    this.leftChild = leftChild;
-    this.rightChild = rightChild;
-    this.hasCachedTime = false;
-    this.ascending = ascending;
-  }
-
-  @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
-  @Override
-  public boolean hasNext() throws IOException {
-    if (hasCachedTime) {
-      return true;
+    public AndNode(Node leftChild, Node rightChild) {
+        this.leftChild = leftChild;
+        this.rightChild = rightChild;
+        this.hasCachedTime = false;
     }
-    if (leftChild.hasNext() && rightChild.hasNext()) {
-      if (ascending) {
-        return fillNextCache((l, r) -> l > r);
-      }
-      return fillNextCache((l, r) -> l < r);
-    }
-    return false;
-  }
 
-  private boolean fillNextCache(BiPredicate<Long, Long> seekRight) throws IOException {
-    long leftValue = leftChild.next();
-    long rightValue = rightChild.next();
-    while (true) {
-      if (leftValue == rightValue) {
-        this.hasCachedTime = true;
-        this.cachedTime = leftValue;
-        return true;
-      }
-      if (seekRight.test(leftValue, rightValue)) {
-        if (rightChild.hasNext()) {
-          rightValue = rightChild.next();
-        } else {
-          return false;
+    @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
+    @Override
+    public boolean hasNext() throws IOException {
+        if (hasCachedTime) {
+            return true;
         }
-      } else { // leftValue > rightValue
-        if (leftChild.hasNext()) {
-          leftValue = leftChild.next();
-        } else {
-          return false;
+        if (leftChild.hasNext() && rightChild.hasNext()) {
+            return fillNextCache();
         }
-      }
+        return false;
     }
-  }
 
-  @Override
-  public long next() throws IOException {
-    if (hasNext()) {
-      hasCachedTime = false;
-      return cachedTime;
+    private boolean fillNextCache() throws IOException {
+        Object leftValue = leftChild.nextObject();
+        Object rightValue = rightChild.nextObject();
+        while (true) {
+            if (leftValue == rightValue) {
+                this.hasCachedTime = true;
+                this.cachedObject = leftValue;
+                return true;
+            }
+            if (rightChild.hasNext()) {
+                rightValue = rightChild.nextObject();
+            } else if (leftChild.hasNext()) {
+                leftValue = leftChild.nextObject();
+            } else {
+                return false;
+            }
+        }
     }
-    throw new IOException("no more data");
-  }
 
-  @Override
-  public NodeType getType() {
-    return NodeType.AND;
-  }
+    @Override
+    public long next() throws IOException {
+        throw new IOException("no more data");
+    }
+
+    @Override
+    public Object nextObject() throws IOException {
+        if (leftChild.hasNext() && rightChild.hasNext()) {
+            return cachedObject;
+        }
+        throw new IOException("no more data");
+    }
+
+    @Override
+    public NodeType getType() {
+        return NodeType.AND;
+    }
 }

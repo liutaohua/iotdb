@@ -203,7 +203,15 @@ inClause
     ;
 
 fromClause
-    : FROM prefixPath (COMMA prefixPath)*
+    : FROM (fromPrefixPath | fromTags)
+    ;
+
+fromPrefixPath
+    : prefixPath (COMMA prefixPath)*
+    ;
+
+fromTags
+    : TAGS LR_BRACKET orExpression RR_BRACKET
     ;
 
 specialClause

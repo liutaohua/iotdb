@@ -29,25 +29,7 @@ import org.apache.iotdb.db.qp.constant.FilterConstant;
 import org.apache.iotdb.db.qp.constant.FilterConstant.FilterType;
 import org.apache.iotdb.db.qp.constant.SQLConstant;
 import org.apache.iotdb.db.qp.logical.Operator;
-import org.apache.iotdb.db.qp.logical.crud.AggregationQueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.BasicFunctionOperator;
-import org.apache.iotdb.db.qp.logical.crud.DeleteDataOperator;
-import org.apache.iotdb.db.qp.logical.crud.FillClauseComponent;
-import org.apache.iotdb.db.qp.logical.crud.FillQueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.FilterOperator;
-import org.apache.iotdb.db.qp.logical.crud.FromComponent;
-import org.apache.iotdb.db.qp.logical.crud.GroupByClauseComponent;
-import org.apache.iotdb.db.qp.logical.crud.GroupByFillClauseComponent;
-import org.apache.iotdb.db.qp.logical.crud.GroupByFillQueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.GroupByQueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.InOperator;
-import org.apache.iotdb.db.qp.logical.crud.InsertOperator;
-import org.apache.iotdb.db.qp.logical.crud.LastQueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.QueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.SelectComponent;
-import org.apache.iotdb.db.qp.logical.crud.SpecialClauseComponent;
-import org.apache.iotdb.db.qp.logical.crud.UDFQueryOperator;
-import org.apache.iotdb.db.qp.logical.crud.WhereComponent;
+import org.apache.iotdb.db.qp.logical.crud.*;
 import org.apache.iotdb.db.qp.logical.sys.AlterTimeSeriesOperator;
 import org.apache.iotdb.db.qp.logical.sys.AlterTimeSeriesOperator.AlterType;
 import org.apache.iotdb.db.qp.logical.sys.AuthorOperator;
@@ -1296,10 +1278,19 @@ public class IoTDBSqlVisitor extends SqlBaseBaseVisitor<Operator> {
 
   public void parseFromClause(FromClauseContext ctx) {
     FromComponent fromComponent = new FromComponent();
-    List<PrefixPathContext> prefixFromPaths = ctx.prefixPath();
-    for (PrefixPathContext prefixFromPath : prefixFromPaths) {
-      PartialPath path = parsePrefixPath(prefixFromPath);
-      fromComponent.addPrefixTablePath(path);
+    SqlBaseParser.FromPrefixPathContext fromPrefixPathContext = ctx.fromPrefixPath();
+    if (fromPrefixPathContext != null) {
+      List<PrefixPathContext> prefixFromPaths = fromPrefixPathContext.prefixPath();
+      for (PrefixPathContext prefixFromPath : prefixFromPaths) {
+        PartialPath path = parsePrefixPath(prefixFromPath);
+        fromComponent.addPrefixTablePath(path);
+      }
+    } else {
+      SqlBaseParser.FromTagsContext fromTagsContext = ctx.fromTags();
+      OrExpressionContext orExpressionContext = fromTagsContext.orExpression();
+      fromComponent.setTags(true);
+      FilterOperator filterOperator = parseOrExpression(orExpressionContext, true);
+      fromComponent.setTagsFilterOperator(filterOperator);
     }
     queryOp.setFromComponent(fromComponent);
   }
@@ -1753,63 +1744,63 @@ public class IoTDBSqlVisitor extends SqlBaseBaseVisitor<Operator> {
       return null;
     }
     FilterOperator whereOp = new FilterOperator();
-    whereOp.addChildOperator(parseOrExpression(ctx.orExpression()));
+    whereOp.addChildOperator(parseOrExpression(ctx.orExpression(), false));
     return new WhereComponent(whereOp.getChildren().get(0));
   }
 
-  private FilterOperator parseOrExpression(OrExpressionContext ctx) {
+  private FilterOperator parseOrExpression(OrExpressionContext ctx, boolean isTags) {
     if (ctx.andExpression().size() == 1) {
-      return parseAndExpression(ctx.andExpression(0));
+      return parseAndExpression(ctx.andExpression(0), isTags);
     }
     FilterOperator binaryOp = new FilterOperator(FilterType.KW_OR);
     if (ctx.andExpression().size() > 2) {
-      binaryOp.addChildOperator(parseAndExpression(ctx.andExpression(0)));
-      binaryOp.addChildOperator(parseAndExpression(ctx.andExpression(1)));
+      binaryOp.addChildOperator(parseAndExpression(ctx.andExpression(0), isTags));
+      binaryOp.addChildOperator(parseAndExpression(ctx.andExpression(1), isTags));
       for (int i = 2; i < ctx.andExpression().size(); i++) {
         FilterOperator op = new FilterOperator(FilterType.KW_OR);
         op.addChildOperator(binaryOp);
-        op.addChildOperator(parseAndExpression(ctx.andExpression(i)));
+        op.addChildOperator(parseAndExpression(ctx.andExpression(i), isTags));
         binaryOp = op;
       }
     } else {
       for (AndExpressionContext andExpressionContext : ctx.andExpression()) {
-        binaryOp.addChildOperator(parseAndExpression(andExpressionContext));
+        binaryOp.addChildOperator(parseAndExpression(andExpressionContext, isTags));
       }
     }
     return binaryOp;
   }
 
-  private FilterOperator parseAndExpression(AndExpressionContext ctx) {
+  private FilterOperator parseAndExpression(AndExpressionContext ctx, boolean isTags) {
     if (ctx.predicate().size() == 1) {
-      return parsePredicate(ctx.predicate(0));
+      return parsePredicate(ctx.predicate(0), isTags);
     }
     FilterOperator binaryOp = new FilterOperator(FilterType.KW_AND);
     int size = ctx.predicate().size();
     if (size > 2) {
-      binaryOp.addChildOperator(parsePredicate(ctx.predicate(0)));
-      binaryOp.addChildOperator(parsePredicate(ctx.predicate(1)));
+      binaryOp.addChildOperator(parsePredicate(ctx.predicate(0), isTags));
+      binaryOp.addChildOperator(parsePredicate(ctx.predicate(1), isTags));
       for (int i = 2; i < size; i++) {
         FilterOperator op = new FilterOperator(FilterType.KW_AND);
         op.addChildOperator(binaryOp);
-        op.addChildOperator(parsePredicate(ctx.predicate(i)));
+        op.addChildOperator(parsePredicate(ctx.predicate(i), isTags));
         binaryOp = op;
       }
     } else {
       for (PredicateContext predicateContext : ctx.predicate()) {
-        binaryOp.addChildOperator(parsePredicate(predicateContext));
+        binaryOp.addChildOperator(parsePredicate(predicateContext, isTags));
       }
     }
     return binaryOp;
   }
 
   @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
-  private FilterOperator parsePredicate(PredicateContext ctx) {
+  private FilterOperator parsePredicate(PredicateContext ctx, boolean isTags) {
     if (ctx.OPERATOR_NOT() != null) {
       FilterOperator notOp = new FilterOperator(FilterType.KW_NOT);
-      notOp.addChildOperator(parseOrExpression(ctx.orExpression()));
+      notOp.addChildOperator(parseOrExpression(ctx.orExpression(), isTags));
       return notOp;
     } else if (ctx.LR_BRACKET() != null && ctx.OPERATOR_NOT() == null) {
-      return parseOrExpression(ctx.orExpression());
+      return parseOrExpression(ctx.orExpression(), isTags);
     } else {
       PartialPath path = null;
       if (ctx.TIME() != null || ctx.TIMESTAMP() != null) {
@@ -1824,12 +1815,21 @@ public class IoTDBSqlVisitor extends SqlBaseBaseVisitor<Operator> {
       if (path == null) {
         throw new SQLParserException("Path is null, please check the sql.");
       }
-      if (ctx.inClause() != null) {
+      if (isTags) {
+        return parseTagsOperator(ctx, path);
+      } else if (ctx.inClause() != null) {
         return parseInOperator(ctx.inClause(), path);
       } else {
         return parseBasicFunctionOperator(ctx, path);
       }
     }
+  }
+
+  private FilterOperator parseTagsOperator(PredicateContext ctx, PartialPath path) {
+    return new TagsFilterOperator(
+        FilterConstant.lexerToFilterType.get(ctx.comparisonOperator().type.getType()),
+        path,
+        ctx.constant().getText());
   }
 
   private FilterOperator parseInOperator(InClauseContext ctx, PartialPath path) {

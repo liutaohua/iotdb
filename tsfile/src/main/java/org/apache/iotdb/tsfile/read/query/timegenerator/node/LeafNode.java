@@ -70,6 +70,16 @@ public class LeafNode implements Node {
     throw new IOException("no more data");
   }
 
+  @Override
+  public Object nextObject() throws IOException {
+    if ((hasCached || hasNext())) {
+      hasCached = false;
+      cacheData.next();
+      return cachedTime;
+    }
+    throw new IOException("no more data");
+  }
+
   /**
    * Check whether the current time equals the given time.
    *

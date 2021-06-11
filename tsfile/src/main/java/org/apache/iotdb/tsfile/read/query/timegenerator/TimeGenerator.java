@@ -24,7 +24,7 @@ import org.apache.iotdb.tsfile.read.expression.ExpressionType;
 import org.apache.iotdb.tsfile.read.expression.IBinaryExpression;
 import org.apache.iotdb.tsfile.read.expression.IExpression;
 import org.apache.iotdb.tsfile.read.expression.impl.SingleSeriesExpression;
-import org.apache.iotdb.tsfile.read.query.timegenerator.node.AndNode;
+import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.LeafNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.Node;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.OrNode;
@@ -43,10 +43,10 @@ import java.util.List;
  */
 public abstract class TimeGenerator {
 
-  private HashMap<Path, List<LeafNode>> leafNodeCache = new HashMap<>();
-  private HashMap<Path, List<Object>> leafValuesCache;
+  protected HashMap<Path, List<LeafNode>> leafNodeCache = new HashMap<>();
+  protected HashMap<Path, List<Object>> leafValuesCache;
   protected Node operatorNode;
-  private boolean hasOrNode;
+  protected boolean hasOrNode;
 
   public boolean hasNext() throws IOException {
     return operatorNode.hasNext();
@@ -64,6 +64,20 @@ public abstract class TimeGenerator {
                   .add(nodes.get(0).currentValue()));
     }
     return operatorNode.next();
+  }
+
+  public Object nextObject() throws IOException {
+    if (!hasOrNode) {
+      if (leafValuesCache == null) {
+        leafValuesCache = new HashMap<>();
+      }
+      leafNodeCache.forEach(
+              (path, nodes) ->
+                      leafValuesCache
+                              .computeIfAbsent(path, k -> new ArrayList<>())
+                              .add(nodes.get(0).currentValue()));
+    }
+    return operatorNode.nextObject();
   }
 
   /** ATTENTION: this method should only be used when there is no `OR` node */
@@ -117,7 +131,7 @@ public abstract class TimeGenerator {
         hasOrNode = true;
         return new OrNode(leftChild, rightChild, isAscending());
       } else if (expression.getType() == ExpressionType.AND) {
-        return new AndNode(leftChild, rightChild, isAscending());
+        return new LongAndNode(leftChild, rightChild, isAscending());
       }
       throw new UnSupportedDataTypeException(
           "Unsupported ExpressionType when construct OperatorNode: " + expression.getType());

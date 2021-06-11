@@ -41,7 +41,7 @@ public class BasicFunctionOperator extends FunctionOperator {
 
   protected String value;
   private Logger logger = LoggerFactory.getLogger(BasicFunctionOperator.class);
-  private BasicOperatorType funcToken;
+  protected BasicOperatorType funcToken;
 
   /**
    * BasicFunctionOperator Constructor.

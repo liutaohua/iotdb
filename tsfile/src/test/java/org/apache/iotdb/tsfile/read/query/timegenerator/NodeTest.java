@@ -18,7 +18,7 @@
  */
 package org.apache.iotdb.tsfile.read.query.timegenerator;
 
-import org.apache.iotdb.tsfile.read.query.timegenerator.node.AndNode;
+import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.LeafNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.Node;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.NodeType;
@@ -36,7 +36,7 @@ public class NodeTest {
   @Test
   public void testType() {
     Assert.assertEquals(NodeType.LEAF, new LeafNode(null).getType());
-    Assert.assertEquals(NodeType.AND, new AndNode(null, null).getType());
+    Assert.assertEquals(NodeType.AND, new LongAndNode(null, null).getType());
     Assert.assertEquals(NodeType.OR, new OrNode(null, null).getType());
   }
 
@@ -89,7 +89,7 @@ public class NodeTest {
   private void testAnd(long[] ret, long[] left, long[] right) throws IOException {
     int index = 0;
     Node andNode =
-        new AndNode(
+        new LongAndNode(
             new LeafNode(new FakedBatchReader(left)), new LeafNode(new FakedBatchReader(right)));
     while (andNode.hasNext()) {
       long value = andNode.next();

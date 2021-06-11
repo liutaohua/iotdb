@@ -26,5 +26,7 @@ public interface Node {
 
   long next() throws IOException;
 
+  Object nextObject() throws IOException;
+
   NodeType getType();
 }

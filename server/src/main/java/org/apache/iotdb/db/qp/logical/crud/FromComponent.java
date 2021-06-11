@@ -29,6 +29,10 @@ public class FromComponent {
 
   private List<PartialPath> prefixList = new ArrayList<>();
 
+  private boolean isTags = false;
+
+  private FilterOperator tagsFilterOperator;
+
   public FromComponent() {}
 
   public void addPrefixTablePath(PartialPath prefixPath) {
@@ -37,5 +41,29 @@ public class FromComponent {
 
   public List<PartialPath> getPrefixPaths() {
     return prefixList;
+  }
+
+  public List<PartialPath> getPrefixList() {
+    return prefixList;
+  }
+
+  public void setPrefixList(List<PartialPath> prefixList) {
+    this.prefixList = prefixList;
+  }
+
+  public boolean isTags() {
+    return isTags;
+  }
+
+  public void setTags(boolean tags) {
+    isTags = tags;
+  }
+
+  public FilterOperator getTagsFilterOperator() {
+    return tagsFilterOperator;
+  }
+
+  public void setTagsFilterOperator(FilterOperator tagsFilterOperator) {
+    this.tagsFilterOperator = tagsFilterOperator;
   }
 }
