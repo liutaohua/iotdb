@@ -15,7 +15,6 @@ import org.apache.iotdb.tsfile.read.expression.impl.SingleSeriesExpression;
 import org.apache.iotdb.tsfile.read.filter.basic.UnaryFilter;
 import org.apache.iotdb.tsfile.read.query.timegenerator.TimeGenerator;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.AndNode;
-import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.Node;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.OrNode;
 import org.apache.iotdb.tsfile.read.reader.IBatchReader;
@@ -75,6 +74,8 @@ public class TagsGenerator extends TimeGenerator {
         showTimeSeriesPlan.setKey(index.getFullPath());
         showTimeSeriesPlan.setValue(String.valueOf(value));
         showTimeSeriesPlan.setOrderByHeat(false);
-        return MManager.getInstance().showTimeseries(showTimeSeriesPlan, new QueryContext());
+        List<ShowTimeSeriesResult> showTimeSeriesResults = MManager.getInstance().showTimeseries(showTimeSeriesPlan, new QueryContext());
+        showTimeSeriesResults.sort(ShowTimeSeriesResult::compareTo);
+        return showTimeSeriesResults;
     }
 }

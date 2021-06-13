@@ -31,7 +31,7 @@ public class TagsLeafNode extends LeafNode {
     }
 
     @Override
-    public Object nextObject() throws IOException {
+    public Comparable nextObject() throws IOException {
         return showTimeSeriesResults.remove(0);
     }
 

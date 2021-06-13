@@ -116,12 +116,8 @@ public class Planner {
     private QueryOperator optimizeQueryOperator(QueryOperator root, int fetchSize)
             throws QueryProcessException {
         RemoveTagsOptimizer removeTagsOptimizer = new RemoveTagsOptimizer();
-        QueryOperator op = (QueryOperator) removeTagsOptimizer.transform(root, 0);
-        if (op == null) {
-            root = (QueryOperator) new ConcatPathOptimizer().transform(root, fetchSize);
-        } else {
-            root = op;
-        }
+        root = (QueryOperator) removeTagsOptimizer.transform(root, 0);
+        root = (QueryOperator) new ConcatPathOptimizer().transform(root, fetchSize);
         WhereComponent whereComponent = root.getWhereComponent();
         if (whereComponent == null) {
             return root;

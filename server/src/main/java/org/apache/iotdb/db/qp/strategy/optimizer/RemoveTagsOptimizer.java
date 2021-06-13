@@ -13,6 +13,7 @@ import org.apache.iotdb.db.query.timegenerator.TagsGenerator;
 import org.apache.iotdb.tsfile.read.expression.IExpression;
 
 import java.util.Collections;
+import java.util.HashSet;
 
 public class RemoveTagsOptimizer implements ILogicalOptimizer {
     @Override
@@ -31,15 +32,29 @@ public class RemoveTagsOptimizer implements ILogicalOptimizer {
         FilterOperator tagsFilterOperator = fromComponent.getTagsFilterOperator();
         IExpression iExpression = tagsFilterOperator.transformToExpression(Collections.emptyMap());
         TagsGenerator tagsGenerator = new TagsGenerator();
+
+        HashSet deduplicatePath = new HashSet();
+        HashSet deduplicateSelect = new HashSet();
         try {
             queryOp.getSelectComponent().getResultColumns().clear();
             tagsGenerator.constructNode(iExpression);
             while (tagsGenerator.hasNext()) {
                 ShowTimeSeriesResult next = (ShowTimeSeriesResult) tagsGenerator.nextObject();
-                PartialPath partialPath = new PartialPath(next.getName());
-                queryOp.getSelectComponent().addResultColumn(new ResultColumn(new TimeSeriesOperand(partialPath)));
-                realFromComponent.getPrefixPaths().add(partialPath.getDevicePath());
+                if (!deduplicatePath.contains(next.getName())) {
+                    deduplicatePath.add(next.getName());
+                    PartialPath partialPath = new PartialPath(next.getName());
+
+                    String measurement = partialPath.getMeasurement();
+                    if (!deduplicateSelect.contains(measurement)) {
+                        deduplicateSelect.add(measurement);
+                        queryOp.getSelectComponent()
+                                .addResultColumn(
+                                        new ResultColumn(new TimeSeriesOperand(new PartialPath(measurement))));
+                    }
+                    realFromComponent.getPrefixPaths().add(partialPath.getDevicePath());
+                }
             }
+            realFromComponent.getPrefixPaths().sort(Comparable::compareTo);
         } catch (Exception e) {
             throw new QueryProcessException(e.getMessage());
         }

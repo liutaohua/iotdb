@@ -99,10 +99,7 @@ public class LongAndNode implements Node {
   }
 
   @Override
-  public Object nextObject() throws IOException {
-    if (leftChild.hasNext()&&rightChild.hasNext() ) {
-      return cachedTime;
-    }
+  public Comparable nextObject() throws IOException {
     throw new IOException("no more data");
   }
 

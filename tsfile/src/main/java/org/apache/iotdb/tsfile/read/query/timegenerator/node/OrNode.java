@@ -27,10 +27,10 @@ public class OrNode implements Node {
 
     private boolean hasCachedLeftTime;
     private long cachedLeftTime;
-    private Object cachedLeftObject;
+    private Comparable cachedLeftObject;
     private boolean hasCachedRightTime;
     private long cachedRightTime;
-    private Object cachedRightObject;
+    private Comparable cachedRightObject;
     private boolean ascending = true;
 
     public OrNode(Node leftChild, Node rightChild) {
@@ -68,7 +68,7 @@ public class OrNode implements Node {
         return leftChild.next();
     }
 
-    private Object getLeftObjectValue() throws IOException {
+    private Comparable getLeftObjectValue() throws IOException {
         if (hasCachedLeftTime) {
             hasCachedLeftTime = false;
             return cachedLeftObject;
@@ -88,7 +88,7 @@ public class OrNode implements Node {
         return rightChild.next();
     }
 
-    private Object getRightObjectValue() throws IOException {
+    private Comparable getRightObjectValue() throws IOException {
         if (hasCachedRightTime) {
             hasCachedRightTime = false;
             return cachedRightObject;
@@ -116,20 +116,33 @@ public class OrNode implements Node {
     }
 
     @Override
-    public Object nextObject() throws IOException {
+    public Comparable nextObject() throws IOException {
         if (hasLeftValue() && !hasRightValue()) {
             return getLeftObjectValue();
         } else if (!hasLeftValue() && hasRightValue()) {
             return getRightObjectValue();
         } else if (hasLeftValue() && hasRightValue()) {
-            Object leftValue = getLeftObjectValue();
-            Object rightValue = getRightObjectValue();
+            Comparable leftValue = getLeftObjectValue();
+            Comparable rightValue = getRightObjectValue();
 
-            hasCachedRightTime = true;
-            cachedRightObject = rightValue;
-            return leftValue;
+            return popAndFillObjectNextCache(leftValue.compareTo(rightValue) > 0,
+                    rightValue.compareTo(leftValue) > 0, leftValue, rightValue);
         }
         throw new IOException("no more data");
+    }
+
+    private Comparable popAndFillObjectNextCache(boolean popLeft, boolean popRight, Comparable left, Comparable right) {
+        if (popLeft) {
+            hasCachedRightTime = true;
+            cachedRightObject = right;
+            return left;
+        } else if (popRight) {
+            hasCachedLeftTime = true;
+            cachedLeftObject = left;
+            return right;
+        } else {
+            return left;
+        }
     }
 
     private long popAndFillNextCache(boolean popLeft, boolean popRight, long left, long right) {

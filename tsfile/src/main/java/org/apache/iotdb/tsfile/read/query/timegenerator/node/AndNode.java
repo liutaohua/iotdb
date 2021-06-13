@@ -26,7 +26,7 @@ public class AndNode implements Node {
     private Node leftChild;
     private Node rightChild;
 
-    private Object cachedObject;
+    private Comparable cachedObject;
     private boolean hasCachedTime;
 
     public AndNode(Node leftChild, Node rightChild) {
@@ -42,26 +42,32 @@ public class AndNode implements Node {
             return true;
         }
         if (leftChild.hasNext() && rightChild.hasNext()) {
-            return fillNextCache();
+            return fillNextCache((l, r) -> l.compareTo(r) > 0);
         }
         return false;
     }
 
-    private boolean fillNextCache() throws IOException {
-        Object leftValue = leftChild.nextObject();
-        Object rightValue = rightChild.nextObject();
+    private boolean fillNextCache(BiPredicate<Comparable, Comparable> seekRight) throws IOException {
+        Comparable leftValue = leftChild.nextObject();
+        Comparable rightValue = rightChild.nextObject();
         while (true) {
-            if (leftValue == rightValue) {
+            if (leftValue.equals(rightValue)) {
                 this.hasCachedTime = true;
                 this.cachedObject = leftValue;
                 return true;
             }
-            if (rightChild.hasNext()) {
-                rightValue = rightChild.nextObject();
-            } else if (leftChild.hasNext()) {
-                leftValue = leftChild.nextObject();
-            } else {
-                return false;
+            if (seekRight.test(leftValue, rightValue)) {
+                if (rightChild.hasNext()) {
+                    rightValue = rightChild.nextObject();
+                } else {
+                    return false;
+                }
+            } else { // leftValue > rightValue
+                if (leftChild.hasNext()) {
+                    leftValue = leftChild.nextObject();
+                } else {
+                    return false;
+                }
             }
         }
     }
@@ -72,8 +78,9 @@ public class AndNode implements Node {
     }
 
     @Override
-    public Object nextObject() throws IOException {
-        if (leftChild.hasNext() && rightChild.hasNext()) {
+    public Comparable nextObject() throws IOException {
+        if (hasNext()) {
+            hasCachedTime = false;
             return cachedObject;
         }
         throw new IOException("no more data");

@@ -71,12 +71,7 @@ public class LeafNode implements Node {
   }
 
   @Override
-  public Object nextObject() throws IOException {
-    if ((hasCached || hasNext())) {
-      hasCached = false;
-      cacheData.next();
-      return cachedTime;
-    }
+  public Comparable nextObject() throws IOException {
     throw new IOException("no more data");
   }
 
