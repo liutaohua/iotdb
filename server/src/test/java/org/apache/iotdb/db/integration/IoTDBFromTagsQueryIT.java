@@ -18,40 +18,48 @@ import static org.junit.Assert.fail;
 public class IoTDBFromTagsQueryIT {
 
     public static String[] sqls = new String[]{
-            "create timeseries root.ln.wf01.wt01.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt01.status with datatype=INT32,encoding=PLAIN",
             "ALTER timeseries root.ln.wf01.wt01.status ADD TAGS tag1=1",
 
-            "create timeseries root.ln.wf01.wt02.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt02.status with datatype=INT32,encoding=PLAIN",
             "ALTER timeseries root.ln.wf01.wt02.status ADD TAGS tag1=1",
             "ALTER timeseries root.ln.wf01.wt02.status ADD TAGS tag2=2",
 
-            "create timeseries root.ln.wf01.wt03.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt03.status with datatype=INT32,encoding=PLAIN",
             "ALTER timeseries root.ln.wf01.wt03.status ADD TAGS tag3=3",
             "ALTER timeseries root.ln.wf01.wt03.status ADD TAGS tag2=2",
 
-            "create timeseries root.ln.wf01.wt04.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt04.status with datatype=INT32,encoding=PLAIN",
             "ALTER timeseries root.ln.wf01.wt04.status ADD TAGS tag4=4",
             "ALTER timeseries root.ln.wf01.wt04.status ADD TAGS tag2=2",
 
-            "create timeseries root.ln.wf01.wt05.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt05.status with datatype=INT32,encoding=PLAIN",
             "ALTER timeseries root.ln.wf01.wt05.status ADD TAGS tag5=5",
 
-            "create timeseries root.ln.wf01.wt06.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt06.status with datatype=INT32,encoding=PLAIN",
             "ALTER timeseries root.ln.wf01.wt06.status ADD TAGS tag6=6",
             "ALTER timeseries root.ln.wf01.wt06.status ADD TAGS tag2=2",
             "ALTER timeseries root.ln.wf01.wt06.status ADD TAGS tag3=3",
             "ALTER timeseries root.ln.wf01.wt06.status ADD TAGS tag1=1",
 
 
-            "create timeseries root.ln.wf01.wt07.status with datatype=BOOLEAN,encoding=PLAIN",
+            "create timeseries root.ln.wf01.wt07.plus with datatype=INT32,encoding=PLAIN",
+            "ALTER timeseries root.ln.wf01.wt07.plus ADD TAGS tag7=7",
 
-            "insert into root.ln.wf01.wt01(timestamp,status) values(1509465600000,true)",
-            "insert into root.ln.wf01.wt02(timestamp,status) values(1509465600000,true)",
-            "insert into root.ln.wf01.wt03(timestamp,status) values(1509465600000,true)",
-            "insert into root.ln.wf01.wt04(timestamp,status) values(1509465600000,true)",
-            "insert into root.ln.wf01.wt05(timestamp,status) values(1509465600000,true)",
-            "insert into root.ln.wf01.wt06(timestamp,status) values(1509465600000,false)",
-            "insert into root.ln.wf01.wt07(timestamp,status) values(1509465600000,true)",
+            "create timeseries root.ln.wf01.wt08.plus2 with datatype=INT32,encoding=PLAIN",
+            "ALTER timeseries root.ln.wf01.wt08.plus2 ADD TAGS tag8=8",
+
+
+
+            "insert into root.ln.wf01.wt01(timestamp,status) values(1509465600000,1)",
+            "insert into root.ln.wf01.wt02(timestamp,status) values(1509465600000,1)",
+            "insert into root.ln.wf01.wt03(timestamp,status) values(1509465600000,1)",
+            "insert into root.ln.wf01.wt04(timestamp,status) values(1509465600000,1)",
+            "insert into root.ln.wf01.wt05(timestamp,status) values(1509465600000,1)",
+            "insert into root.ln.wf01.wt06(timestamp,status) values(1509465600000,2)",
+            "insert into root.ln.wf01.wt07(timestamp,plus) values(1509465600000,100)",
+            "insert into root.ln.wf01.wt08(timestamp,plus2) values(1509465600000,99)",
+
     };
 
 
@@ -107,7 +115,7 @@ public class IoTDBFromTagsQueryIT {
 
     @Test
     public void TestTagsAndQuery() throws ClassNotFoundException {
-        String[] retArray = new String[]{"1509465600000,false,",};
+        String[] retArray = new String[]{"1509465600000,2,",};
 
         Class.forName(Config.JDBC_DRIVER_NAME);
         try (Connection connection =
@@ -124,7 +132,7 @@ public class IoTDBFromTagsQueryIT {
                                 resultSetMetaData, "Time,root.ln.wf01.wt06.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -152,7 +160,7 @@ public class IoTDBFromTagsQueryIT {
 
     @Test
     public void TestOrTagsQuery() throws ClassNotFoundException {
-        String[] retArray = new String[]{"1509465600000,true,true,true,true,false",};
+        String[] retArray = new String[]{"1509465600000,1,1,1,1,2",};
 
         Class.forName(Config.JDBC_DRIVER_NAME);
         try (Connection connection =
@@ -173,11 +181,11 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt06.status",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -204,7 +212,7 @@ public class IoTDBFromTagsQueryIT {
 
     @Test
     public void TestMixTagsQuery() throws ClassNotFoundException {
-        String[] retArray = new String[]{"1509465600000,true,false",};
+        String[] retArray = new String[]{"1509465600000,1,2",};
 
         Class.forName(Config.JDBC_DRIVER_NAME);
         try (Connection connection =
@@ -222,8 +230,8 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt06.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -250,7 +258,7 @@ public class IoTDBFromTagsQueryIT {
 
     @Test
     public void TestMix2TagsQuery() throws ClassNotFoundException {
-        String[] retArray = new String[]{"1509465600000,true,true,false",};
+        String[] retArray = new String[]{"1509465600000,1,1,2",};
 
         Class.forName(Config.JDBC_DRIVER_NAME);
         try (Connection connection =
@@ -269,9 +277,9 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt06.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -299,14 +307,14 @@ public class IoTDBFromTagsQueryIT {
 
     @Test
     public void TestValueFilterTagsQuery() throws ClassNotFoundException {
-        String[] retArray = new String[]{"1509465600000,true,true",};
+        String[] retArray = new String[]{"1509465600000,1,1",};
 
         Class.forName(Config.JDBC_DRIVER_NAME);
         try (Connection connection =
                      DriverManager.getConnection(
                              Config.IOTDB_URL_PREFIX + "127.0.0.1:6667/", "root", "root");
              Statement statement = connection.createStatement()) {
-            statement.execute("select * from Tags(tag5='5' or tag4='4' ) where status = false");
+            statement.execute("select * from Tags(tag5='5' or tag4='4' ) where status = 2");
             try (ResultSet resultSet = statement.getResultSet()) {
                 ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
                 List<Integer> actualIndexToExpectedIndexList =
@@ -316,8 +324,8 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt05.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -328,7 +336,7 @@ public class IoTDBFromTagsQueryIT {
             }
 
 
-            statement.execute("select * from Tags(tag5='5' or tag4='4' ) where status = true");
+            statement.execute("select * from Tags(tag5='5' or tag4='4' ) where status = 1");
             try (ResultSet resultSet = statement.getResultSet()) {
                 ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
                 List<Integer> actualIndexToExpectedIndexList =
@@ -338,8 +346,8 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt05.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -367,7 +375,7 @@ public class IoTDBFromTagsQueryIT {
 
     @Test
     public void TestTimeFilterTagsQuery() throws ClassNotFoundException {
-        String[] retArray = new String[]{"1509465600000,true,true",};
+        String[] retArray = new String[]{"1509465600000,1,1",};
 
         Class.forName(Config.JDBC_DRIVER_NAME);
         try (Connection connection =
@@ -384,8 +392,8 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt05.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
                                 });
 
                 int cnt = 0;
@@ -406,8 +414,53 @@ public class IoTDBFromTagsQueryIT {
                                         "root.ln.wf01.wt05.status,",
                                 new int[]{
                                         Types.TIMESTAMP,
-                                        Types.BOOLEAN,
-                                        Types.BOOLEAN,
+                                        Types.INTEGER,
+                                        Types.INTEGER,
+                                });
+
+                int cnt = 0;
+                while (resultSet.next()) {
+                    String[] expectedStrings = retArray[cnt].split(",");
+                    StringBuilder expectedBuilder = new StringBuilder();
+                    StringBuilder actualBuilder = new StringBuilder();
+                    for (int i = 1; i <= resultSetMetaData.getColumnCount(); i++) {
+                        actualBuilder.append(resultSet.getString(i)).append(",");
+                        expectedBuilder
+                                .append(expectedStrings[actualIndexToExpectedIndexList.get(i - 1)])
+                                .append(",");
+                    }
+                    Assert.assertEquals(expectedBuilder.toString(), actualBuilder.toString());
+                    cnt++;
+                }
+                Assert.assertEquals(1, cnt);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+    }
+
+
+    @Test
+    public void TestExpTagsQuery() throws ClassNotFoundException {
+        String[] retArray = new String[]{"1509465600000,199.0",};
+
+        Class.forName(Config.JDBC_DRIVER_NAME);
+        try (Connection connection =
+                     DriverManager.getConnection(
+                             Config.IOTDB_URL_PREFIX + "127.0.0.1:6667/", "root", "root");
+             Statement statement = connection.createStatement()) {
+            boolean hasResultSet = statement.execute("select plus + plus2 from Tags(tag7='7'  or tag8='8' ) where time > 10 ");
+            Assert.assertTrue(hasResultSet);
+
+            try (ResultSet resultSet = statement.getResultSet()) {
+                ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
+                List<Integer> actualIndexToExpectedIndexList =
+                        checkHeader(
+                                resultSetMetaData, "Time,root.ln.wf01.wt07.plus + root.ln.wf01.wt08.plus2,",
+                                new int[]{
+                                        Types.TIMESTAMP,
+                                        Types.DOUBLE,
                                 });
 
                 int cnt = 0;
