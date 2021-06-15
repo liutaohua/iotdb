@@ -24,8 +24,8 @@ import org.apache.iotdb.tsfile.read.expression.ExpressionType;
 import org.apache.iotdb.tsfile.read.expression.IBinaryExpression;
 import org.apache.iotdb.tsfile.read.expression.IExpression;
 import org.apache.iotdb.tsfile.read.expression.impl.SingleSeriesExpression;
-import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.LeafNode;
+import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.Node;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.OrNode;
 import org.apache.iotdb.tsfile.read.reader.IBatchReader;
@@ -72,10 +72,10 @@ public abstract class TimeGenerator {
         leafValuesCache = new HashMap<>();
       }
       leafNodeCache.forEach(
-              (path, nodes) ->
-                      leafValuesCache
-                              .computeIfAbsent(path, k -> new ArrayList<>())
-                              .add(nodes.get(0).currentValue()));
+          (path, nodes) ->
+              leafValuesCache
+                  .computeIfAbsent(path, k -> new ArrayList<>())
+                  .add(nodes.get(0).currentValue()));
     }
     return operatorNode.nextObject();
   }

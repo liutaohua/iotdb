@@ -1224,7 +1224,7 @@ public class MManagerBasicTest {
 
       // show timeseries root.laptop.d1.(s1,s2,s3)
       showTimeSeriesPlan =
-          new  ShowTimeSeriesPlan(new PartialPath("root"), false, null, null, 0, 0, false);
+          new ShowTimeSeriesPlan(new PartialPath("root"), false, null, null, 0, 0, false);
       result = manager.showTimeseries(showTimeSeriesPlan, new QueryContext());
       assertEquals(4, result.size());
       Set<String> set = new HashSet<>();

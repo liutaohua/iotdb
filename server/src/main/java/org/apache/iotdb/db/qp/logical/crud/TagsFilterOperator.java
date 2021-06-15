@@ -17,9 +17,13 @@ public class TagsFilterOperator extends BasicFunctionOperator {
   @Override
   protected Pair<IUnaryExpression, String> transformToSingleQueryFilter(
       Map<PartialPath, TSDataType> pathTSDataTypeHashMap) {
-    IUnaryExpression ret = super.funcToken.getUnaryExpression(singlePath, (value.startsWith("'") && value.endsWith("'"))
-            || (value.startsWith("\"") && value.endsWith("\""))
-            ? value.substring(1, value.length() - 1): value);
+    IUnaryExpression ret =
+        super.funcToken.getUnaryExpression(
+            singlePath,
+            (value.startsWith("'") && value.endsWith("'"))
+                    || (value.startsWith("\"") && value.endsWith("\""))
+                ? value.substring(1, value.length() - 1)
+                : value);
     return new Pair<>(ret, singlePath.getFullPath());
   }
 }

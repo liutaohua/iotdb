@@ -39,100 +39,94 @@ import java.time.ZoneId;
 import static org.apache.iotdb.db.qp.logical.Operator.OperatorType.QUERY;
 import static org.apache.iotdb.db.qp.logical.Operator.OperatorType.QUERY_INDEX;
 
-/**
- * provide a integration method for other user.
- */
+/** provide a integration method for other user. */
 public class Planner {
 
-    public Planner() {
-        // do nothing
-    }
+  public Planner() {
+    // do nothing
+  }
 
-    /**
-     * @param fetchSize this parameter only take effect when it is a query plan
-     */
-    public PhysicalPlan parseSQLToPhysicalPlan(String sqlStr, ZoneId zoneId, int fetchSize)
-            throws QueryProcessException {
-        // from SQL to logical operator
-        Operator operator = LogicalGenerator.generate(sqlStr, zoneId);
-        // check if there are logical errors
-        LogicalChecker.check(operator);
-        // optimize the logical operator
-        operator = logicalOptimize(operator, fetchSize);
-        // from logical operator to physical plan
-        return new PhysicalGenerator().transformToPhysicalPlan(operator, fetchSize);
-    }
+  /** @param fetchSize this parameter only take effect when it is a query plan */
+  public PhysicalPlan parseSQLToPhysicalPlan(String sqlStr, ZoneId zoneId, int fetchSize)
+      throws QueryProcessException {
+    // from SQL to logical operator
+    Operator operator = LogicalGenerator.generate(sqlStr, zoneId);
+    // check if there are logical errors
+    LogicalChecker.check(operator);
+    // optimize the logical operator
+    operator = logicalOptimize(operator, fetchSize);
+    // from logical operator to physical plan
+    return new PhysicalGenerator().transformToPhysicalPlan(operator, fetchSize);
+  }
 
-    public PhysicalPlan rawDataQueryReqToPhysicalPlan(
-            TSRawDataQueryReq rawDataQueryReq, ZoneId zoneId)
-            throws IllegalPathException, QueryProcessException {
-        // from TSRawDataQueryReq to logical operator
-        Operator operator = LogicalGenerator.generate(rawDataQueryReq, zoneId);
-        // check if there are logical errors
-        LogicalChecker.check(operator);
-        // optimize the logical operator
-        operator = logicalOptimize(operator, rawDataQueryReq.fetchSize);
-        // from logical operator to physical plan
-        return new PhysicalGenerator().transformToPhysicalPlan(operator, rawDataQueryReq.fetchSize);
-    }
+  public PhysicalPlan rawDataQueryReqToPhysicalPlan(
+      TSRawDataQueryReq rawDataQueryReq, ZoneId zoneId)
+      throws IllegalPathException, QueryProcessException {
+    // from TSRawDataQueryReq to logical operator
+    Operator operator = LogicalGenerator.generate(rawDataQueryReq, zoneId);
+    // check if there are logical errors
+    LogicalChecker.check(operator);
+    // optimize the logical operator
+    operator = logicalOptimize(operator, rawDataQueryReq.fetchSize);
+    // from logical operator to physical plan
+    return new PhysicalGenerator().transformToPhysicalPlan(operator, rawDataQueryReq.fetchSize);
+  }
 
-    /**
-     * convert last data query to physical plan directly
-     */
-    public PhysicalPlan lastDataQueryReqToPhysicalPlan(
-            TSLastDataQueryReq lastDataQueryReq, ZoneId zoneId)
-            throws QueryProcessException, IllegalPathException {
-        // from TSLastDataQueryReq to logical operator
-        Operator operator = LogicalGenerator.generate(lastDataQueryReq, zoneId);
-        // check if there are logical errors
-        LogicalChecker.check(operator);
-        // optimize the logical operator
-        operator = logicalOptimize(operator, lastDataQueryReq.fetchSize);
-        // from logical operator to physical plan
-        return new PhysicalGenerator().transformToPhysicalPlan(operator, lastDataQueryReq.fetchSize);
-    }
+  /** convert last data query to physical plan directly */
+  public PhysicalPlan lastDataQueryReqToPhysicalPlan(
+      TSLastDataQueryReq lastDataQueryReq, ZoneId zoneId)
+      throws QueryProcessException, IllegalPathException {
+    // from TSLastDataQueryReq to logical operator
+    Operator operator = LogicalGenerator.generate(lastDataQueryReq, zoneId);
+    // check if there are logical errors
+    LogicalChecker.check(operator);
+    // optimize the logical operator
+    operator = logicalOptimize(operator, lastDataQueryReq.fetchSize);
+    // from logical operator to physical plan
+    return new PhysicalGenerator().transformToPhysicalPlan(operator, lastDataQueryReq.fetchSize);
+  }
 
-    /**
-     * given an unoptimized logical operator tree and return a optimized result.
-     *
-     * @param operator unoptimized logical operator
-     * @return optimized logical operator
-     * @throws LogicalOptimizeException exception in logical optimizing
-     */
-    protected Operator logicalOptimize(Operator operator, int fetchSize)
-            throws QueryProcessException {
-        return operator.getType().equals(QUERY) || operator.getType().equals(QUERY_INDEX)
-                ? optimizeQueryOperator((QueryOperator) operator, fetchSize)
-                : operator;
-    }
+  /**
+   * given an unoptimized logical operator tree and return a optimized result.
+   *
+   * @param operator unoptimized logical operator
+   * @return optimized logical operator
+   * @throws LogicalOptimizeException exception in logical optimizing
+   */
+  protected Operator logicalOptimize(Operator operator, int fetchSize)
+      throws QueryProcessException {
+    return operator.getType().equals(QUERY) || operator.getType().equals(QUERY_INDEX)
+        ? optimizeQueryOperator((QueryOperator) operator, fetchSize)
+        : operator;
+  }
 
-    /**
-     * given an unoptimized query operator and return an optimized result.
-     *
-     * @param root unoptimized query operator
-     * @return optimized query operator
-     * @throws LogicalOptimizeException exception in query optimizing
-     */
-    private QueryOperator optimizeQueryOperator(QueryOperator root, int fetchSize)
-            throws QueryProcessException {
-        RemoveTagsOptimizer removeTagsOptimizer = new RemoveTagsOptimizer();
-        root = (QueryOperator) removeTagsOptimizer.transform(root, 0);
-        root = (QueryOperator) new ConcatPathOptimizer().transform(root, fetchSize);
-        WhereComponent whereComponent = root.getWhereComponent();
-        if (whereComponent == null) {
-            return root;
-        }
-        FilterOperator filter = whereComponent.getFilterOperator();
-        filter = new RemoveNotOptimizer().optimize(filter);
-        filter = new DnfFilterOptimizer().optimize(filter);
-        filter = new MergeSingleFilterOptimizer().optimize(filter);
-        whereComponent.setFilterOperator(filter);
-
-        return root;
+  /**
+   * given an unoptimized query operator and return an optimized result.
+   *
+   * @param root unoptimized query operator
+   * @return optimized query operator
+   * @throws LogicalOptimizeException exception in query optimizing
+   */
+  private QueryOperator optimizeQueryOperator(QueryOperator root, int fetchSize)
+      throws QueryProcessException {
+    RemoveTagsOptimizer removeTagsOptimizer = new RemoveTagsOptimizer();
+    root = (QueryOperator) removeTagsOptimizer.transform(root, 0);
+    root = (QueryOperator) new ConcatPathOptimizer().transform(root, fetchSize);
+    WhereComponent whereComponent = root.getWhereComponent();
+    if (whereComponent == null) {
+      return root;
     }
+    FilterOperator filter = whereComponent.getFilterOperator();
+    filter = new RemoveNotOptimizer().optimize(filter);
+    filter = new DnfFilterOptimizer().optimize(filter);
+    filter = new MergeSingleFilterOptimizer().optimize(filter);
+    whereComponent.setFilterOperator(filter);
 
-    @TestOnly
-    public PhysicalPlan parseSQLToPhysicalPlan(String sqlStr) throws QueryProcessException {
-        return parseSQLToPhysicalPlan(sqlStr, ZoneId.systemDefault(), 1024);
-    }
+    return root;
+  }
+
+  @TestOnly
+  public PhysicalPlan parseSQLToPhysicalPlan(String sqlStr) throws QueryProcessException {
+    return parseSQLToPhysicalPlan(sqlStr, ZoneId.systemDefault(), 1024);
+  }
 }

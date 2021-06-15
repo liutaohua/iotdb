@@ -18,8 +18,8 @@
  */
 package org.apache.iotdb.tsfile.read.query.timegenerator;
 
-import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.LeafNode;
+import org.apache.iotdb.tsfile.read.query.timegenerator.node.LongAndNode;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.Node;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.NodeType;
 import org.apache.iotdb.tsfile.read.query.timegenerator.node.OrNode;

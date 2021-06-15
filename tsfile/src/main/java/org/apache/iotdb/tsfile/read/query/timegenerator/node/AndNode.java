@@ -23,71 +23,71 @@ import java.util.function.BiPredicate;
 
 public class AndNode implements Node {
 
-    private Node leftChild;
-    private Node rightChild;
+  private Node leftChild;
+  private Node rightChild;
 
-    private Comparable cachedObject;
-    private boolean hasCachedTime;
+  private Comparable cachedObject;
+  private boolean hasCachedTime;
 
-    public AndNode(Node leftChild, Node rightChild) {
-        this.leftChild = leftChild;
-        this.rightChild = rightChild;
-        this.hasCachedTime = false;
+  public AndNode(Node leftChild, Node rightChild) {
+    this.leftChild = leftChild;
+    this.rightChild = rightChild;
+    this.hasCachedTime = false;
+  }
+
+  @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
+  @Override
+  public boolean hasNext() throws IOException {
+    if (hasCachedTime) {
+      return true;
     }
+    if (leftChild.hasNext() && rightChild.hasNext()) {
+      return fillNextCache((l, r) -> l.compareTo(r) > 0);
+    }
+    return false;
+  }
 
-    @SuppressWarnings("squid:S3776") // Suppress high Cognitive Complexity warning
-    @Override
-    public boolean hasNext() throws IOException {
-        if (hasCachedTime) {
-            return true;
+  private boolean fillNextCache(BiPredicate<Comparable, Comparable> seekRight) throws IOException {
+    Comparable leftValue = leftChild.nextObject();
+    Comparable rightValue = rightChild.nextObject();
+    while (true) {
+      if (leftValue.equals(rightValue)) {
+        this.hasCachedTime = true;
+        this.cachedObject = leftValue;
+        return true;
+      }
+      if (seekRight.test(leftValue, rightValue)) {
+        if (rightChild.hasNext()) {
+          rightValue = rightChild.nextObject();
+        } else {
+          return false;
         }
-        if (leftChild.hasNext() && rightChild.hasNext()) {
-            return fillNextCache((l, r) -> l.compareTo(r) > 0);
+      } else { // leftValue > rightValue
+        if (leftChild.hasNext()) {
+          leftValue = leftChild.nextObject();
+        } else {
+          return false;
         }
-        return false;
+      }
     }
+  }
 
-    private boolean fillNextCache(BiPredicate<Comparable, Comparable> seekRight) throws IOException {
-        Comparable leftValue = leftChild.nextObject();
-        Comparable rightValue = rightChild.nextObject();
-        while (true) {
-            if (leftValue.equals(rightValue)) {
-                this.hasCachedTime = true;
-                this.cachedObject = leftValue;
-                return true;
-            }
-            if (seekRight.test(leftValue, rightValue)) {
-                if (rightChild.hasNext()) {
-                    rightValue = rightChild.nextObject();
-                } else {
-                    return false;
-                }
-            } else { // leftValue > rightValue
-                if (leftChild.hasNext()) {
-                    leftValue = leftChild.nextObject();
-                } else {
-                    return false;
-                }
-            }
-        }
-    }
+  @Override
+  public long next() throws IOException {
+    throw new IOException("no more data");
+  }
 
-    @Override
-    public long next() throws IOException {
-        throw new IOException("no more data");
+  @Override
+  public Comparable nextObject() throws IOException {
+    if (hasNext()) {
+      hasCachedTime = false;
+      return cachedObject;
     }
+    throw new IOException("no more data");
+  }
 
-    @Override
-    public Comparable nextObject() throws IOException {
-        if (hasNext()) {
-            hasCachedTime = false;
-            return cachedObject;
-        }
-        throw new IOException("no more data");
-    }
-
-    @Override
-    public NodeType getType() {
-        return NodeType.AND;
-    }
+  @Override
+  public NodeType getType() {
+    return NodeType.AND;
+  }
 }
