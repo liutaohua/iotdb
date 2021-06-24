@@ -1,11 +1,11 @@
 package org.apache.iotdb.db.query.timegenerator;
 
 import org.apache.iotdb.db.exception.metadata.MetadataException;
-import org.apache.iotdb.db.metadata.MManager;
 import org.apache.iotdb.db.metadata.PartialPath;
 import org.apache.iotdb.db.qp.physical.sys.ShowTimeSeriesPlan;
 import org.apache.iotdb.db.query.context.QueryContext;
 import org.apache.iotdb.db.query.dataset.ShowTimeSeriesResult;
+import org.apache.iotdb.db.service.IoTDB;
 import org.apache.iotdb.tsfile.exception.write.UnSupportedDataTypeException;
 import org.apache.iotdb.tsfile.read.common.Path;
 import org.apache.iotdb.tsfile.read.expression.ExpressionType;
@@ -77,7 +77,7 @@ public class TagsGenerator extends TimeGenerator {
     showTimeSeriesPlan.setValue(String.valueOf(value));
     showTimeSeriesPlan.setOrderByHeat(false);
     List<ShowTimeSeriesResult> showTimeSeriesResults =
-        MManager.getInstance().showTimeseries(showTimeSeriesPlan, new QueryContext());
+        IoTDB.metaManager.getInstance().showTimeseries(showTimeSeriesPlan, new QueryContext());
     showTimeSeriesResults.sort(ShowTimeSeriesResult::compareTo);
     return showTimeSeriesResults;
   }
